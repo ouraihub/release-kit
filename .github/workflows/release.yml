@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      # release-kit has nothing to build, so release-please tags and releases directly.
+      - id: rp
+        uses: googleapis/release-please-action@v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+      - if: steps.rp.outputs.release_created
+        uses: actions/checkout@v7
+      - if: steps.rp.outputs.release_created
+        run: |
+          git tag -f "v${{ steps.rp.outputs.major }}"
+          git push -f origin "v${{ steps.rp.outputs.major }}"

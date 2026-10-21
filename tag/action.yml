@@ -1,0 +1,24 @@
+name: release-kit tag
+description: After a successful build of a merged release PR, tags that exact commit and marks the PR as tagged.
+inputs:
+  token:
+    description: Token whose tag push triggers tag workflows (a PAT or app token; GITHUB_TOKEN tags trigger nothing)
+    required: true
+outputs:
+  tag:
+    description: Tag for the manifest version, e.g. desktop-v0.2.2
+    value: ${{ steps.tag.outputs.tag }}
+  version:
+    description: Manifest version
+    value: ${{ steps.tag.outputs.version }}
+  created:
+    description: "'true' when this run created the tag"
+    value: ${{ steps.tag.outputs.created }}
+runs:
+  using: composite
+  steps:
+    - id: tag
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: node "$GITHUB_ACTION_PATH/../bin/release-kit.mjs" tag

@@ -1,0 +1,16 @@
+name: release-kit release PR
+description: Opens or updates the release PR (version files + Chinese CHANGELOG) from conventional commits.
+inputs:
+  token:
+    description: Token that can push branches and open PRs (GITHUB_TOKEN with contents/pull-requests write is enough)
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: googleapis/release-please-action@v5.0.0
+      with:
+        token: ${{ inputs.token }}
+        config-file: release-please-config.json
+        manifest-file: .release-please-manifest.json
+        # Tags come from `release-kit tag` after the build succeeded, never from the merge itself.
+        skip-github-release: true

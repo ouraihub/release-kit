@@ -1,0 +1,7 @@
+name: release-kit check
+description: Fails on non-conventional or session-note commit messages and on reference-project names in tracked files.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: node "$GITHUB_ACTION_PATH/../bin/release-kit.mjs" check
