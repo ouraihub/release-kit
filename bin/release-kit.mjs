@@ -92,7 +92,8 @@ else if (command === 'tag') {
 } else if (command === 'init') {
   const written = init({ component: values.component, version: values.version, versionFiles: values['version-file'] ?? [], forbidden: values.forbid ?? [] })
   console.log(written.length ? `created:\n  ${written.join('\n  ')}` : 'nothing to create; files already exist')
-  console.log('\nnext: add the tag job after your build (README "构建成功后打 tag").')
+  console.log('\nnext: add the tag job after your build (README "构建成功后打 tag"),')
+  console.log('      and give AI assistants skills/release-kit/SKILL.md (README "给大模型用").')
 } else {
   console.log(USAGE)
   process.exit(command ? 1 : 0)

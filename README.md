@@ -84,6 +84,18 @@ npx --yes github:ouraihub/release-kit#v0 notes "$VERSION"
 npx github:ouraihub/release-kit check
 ```
 
+## 给大模型用
+
+[`skills/release-kit/SKILL.md`](skills/release-kit/SKILL.md) 是给 AI 编码助手的使用说明，包括提交规则、正反例、发版、接入新项目和常见失败的排查。把它放进助手能读取的 skills 目录：
+
+```bash
+# Claude Code 项目级；用户级放 ~/.claude/skills/release-kit/
+mkdir -p .claude/skills/release-kit
+curl -fsSL https://raw.githubusercontent.com/ouraihub/release-kit/v0/skills/release-kit/SKILL.md -o .claude/skills/release-kit/SKILL.md
+```
+
+不支持 skills 的助手，在 AGENTS.md 里加一行：`提交和发布规则见 https://github.com/ouraihub/release-kit/blob/main/skills/release-kit/SKILL.md`。
+
 ## 版本
 
 用 `@v0` 引用会跟随 0.x 的最新版本。想锁定具体版本，就引用某个 tag 或 commit。
