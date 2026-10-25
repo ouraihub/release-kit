@@ -1,5 +1,7 @@
 # release-kit
 
+[![CI](https://github.com/ouraihub/release-kit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ouraihub/release-kit/actions/workflows/ci.yml)
+
 给 GitHub 项目用的标准发布流程：
 
 - **发布 PR**：按 Conventional Commits 自动维护版本号和中文 `CHANGELOG.md`（基于 [release-please](https://github.com/googleapis/release-please)）。合并这个 PR 就是发版。
