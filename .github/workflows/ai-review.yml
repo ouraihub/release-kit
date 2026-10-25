@@ -1,0 +1,32 @@
+name: AI review
+
+# pull_request_target runs this file from main, so a PR cannot weaken its own review.
+# PR code is never checked out or executed; the diff is only read as text.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    name: AI review
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: ouraihub/release-kit/review@v0
+        with:
+          base-url: ${{ secrets.AI_BASE_URL }}
+          api-key: ${{ secrets.AI_API_KEY }}
+          model: ${{ vars.AI_MODEL }}
+          merge-token: ${{ secrets.RELEASE_TOKEN }}
