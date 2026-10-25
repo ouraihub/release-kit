@@ -13,9 +13,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       # release-kit has nothing to build, so release-please tags and releases directly.
+      # RELEASE_TOKEN: a GITHUB_TOKEN release PR triggers no workflows, so its required checks never
+      # report and it can never merge. Same secret ai-review.yml already merges with; this job only
+      # runs on pushes to main, never on PR code.
       - id: rp
         uses: googleapis/release-please-action@v5.0.0
         with:
+          token: ${{ secrets.RELEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
       - if: steps.rp.outputs.release_created
