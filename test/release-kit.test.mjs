@@ -9,6 +9,7 @@ import { lintMessage } from '../lib/commits.mjs'
 import { DEFAULTS } from '../lib/config.mjs'
 import { versionFileEntry } from '../lib/init.mjs'
 import { changelogSection } from '../lib/release.mjs'
+import { MAX_DIFF_CHARS, parseVerdict, reviewBatches, systemPrompt } from '../lib/review.mjs'
 import { planTag } from '../lib/tag.mjs'
 
 const config = { ...DEFAULTS, forbidden: ['Cherry', '对标'] }
@@ -111,4 +112,21 @@ test('tag only the commit that changed the manifest, once', () => {
     rmSync(dir, { recursive: true, force: true })
     rmSync(origin, { recursive: true, force: true })
   }
+})
+
+test('review input is complete bounded batches and verdicts fail closed', () => {
+  const patch = (name, size) => `diff --git a/${name} b/${name}\n` + 'x'.repeat(size) + '\n'
+  const a = patch('a', 70_000), b = patch('b', 70_000), c = patch('c', 20_000)
+  const batches = reviewBatches(a + b + c)
+  assert.deepEqual(batches, [a, b + c])
+  assert.equal(batches.join(''), a + b + c)
+  assert.deepEqual(reviewBatches(patch('edge', MAX_DIFF_CHARS - patch('edge', 0).length)).map((value) => value.length), [MAX_DIFF_CHARS])
+  assert.throws(() => reviewBatches(patch('huge', MAX_DIFF_CHARS)), /exceeds/)
+  assert.throws(() => reviewBatches(''), /Missing/)
+  assert.equal(parseVerdict('{"verdict":"approve","issues":["bug"]}').verdict, 'request_changes')
+  assert.equal(parseVerdict('{"verdict":"approve"}'), null)
+  assert.equal(parseVerdict('invalid'), null)
+  assert.equal(parseVerdict('{"verdict":"approve","issues":[]}').verdict, 'approve')
+  assert.match(systemPrompt('', ['.github/workflows/ci.yml']), /at least as strict[\s\S]*has no AGENTS\.md/)
+  assert.doesNotMatch(systemPrompt('rule', []), /changes CI or agent rules/)
 })
