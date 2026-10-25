@@ -1,0 +1,42 @@
+name: release-kit review
+description: AI merge gate. Reviews the PR diff against AGENTS.md and, when approved, enables auto-merge.
+inputs:
+  base-url:
+    description: OpenAI-compatible API base URL
+    required: true
+  api-key:
+    description: API key for base-url
+    required: true
+  model:
+    description: Model name
+    required: true
+  merge-token:
+    description: >-
+      Token that enables auto-merge after approval (PAT or app token: a GITHUB_TOKEN merge triggers no
+      push workflows). Empty disables merging. Branch protection still waits for every required check.
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    # A skipped job counts as passed, so fork PRs fail here instead of being skipped.
+    - name: Only branches of this repository are reviewed
+      if: github.event.pull_request.head.repo.full_name != github.repository
+      shell: bash
+      run: exit 1
+    - name: Review
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        AI_BASE_URL: ${{ inputs.base-url }}
+        AI_API_KEY: ${{ inputs.api-key }}
+        AI_MODEL: ${{ inputs.model }}
+      run: node "$GITHUB_ACTION_PATH/../bin/release-kit.mjs" review
+    # release-please PRs are merged by the release schedule, not on approval.
+    - name: Merge once every required check passes
+      if: inputs.merge-token != '' && !startsWith(github.head_ref, 'release-please--')
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.merge-token }}
+      run: gh pr merge "${{ github.event.pull_request.number }}" -R "${{ github.repository }}" --auto --merge

@@ -7,13 +7,15 @@ import { commitsSince, lintMessage } from '../lib/commits.mjs'
 import { loadConfig } from '../lib/config.mjs'
 import { init } from '../lib/init.mjs'
 import { changelogSection } from '../lib/release.mjs'
+import { review } from '../lib/review.mjs'
 import { createTag, planTag } from '../lib/tag.mjs'
 
 const USAGE = `release-kit <command>
   init --version <x.y.z> [--component <name>] --version-file <path>... [--forbid <word>...]
   check [--base <ref>]       commit messages since base + forbidden words in tracked files
   tag [--dry-run]            tag a merged release PR (CI, after the build succeeded)
-  notes <version>            print that version's CHANGELOG.md section`
+  notes <version>            print that version's CHANGELOG.md section
+  review                     AI merge gate for one PR (CI; env PR_NUMBER, AI_BASE_URL, AI_API_KEY, AI_MODEL)`
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
 const has = (ref) => {
@@ -89,6 +91,10 @@ else if (command === 'tag') {
   const notes = changelogSection(readFileSync('CHANGELOG.md', 'utf8'), positionals[0] ?? '')
   if (!notes) throw new Error(`CHANGELOG.md has no section for ${positionals[0]}`)
   console.log(notes)
+} else if (command === 'review') {
+  const { AI_BASE_URL, AI_API_KEY, AI_MODEL, PR_NUMBER, GITHUB_REPOSITORY, GITHUB_STEP_SUMMARY } = process.env
+  const approved = await review({ baseUrl: AI_BASE_URL, apiKey: AI_API_KEY, model: AI_MODEL, pr: PR_NUMBER, repository: GITHUB_REPOSITORY, summaryFile: GITHUB_STEP_SUMMARY })
+  process.exitCode = approved ? 0 : 1
 } else if (command === 'init') {
   const written = init({ component: values.component, version: values.version, versionFiles: values['version-file'] ?? [], forbidden: values.forbid ?? [] })
   console.log(written.length ? `created:\n  ${written.join('\n  ')}` : 'nothing to create; files already exist')

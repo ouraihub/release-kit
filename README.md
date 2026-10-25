@@ -57,6 +57,53 @@ npx github:ouraihub/release-kit init --version 0.2.1 --component desktop \
 npx --yes github:ouraihub/release-kit#v0 notes "$VERSION"
 ```
 
+## AI 审查与自动合并
+
+每个 PR 由模型按仓库根目录的 `AGENTS.md` 审查（没有就只看正确性和安全）。通过后开启自动合并，等分支保护要求的检查全部通过再合并。新建 `.github/workflows/ai-review.yml`：
+
+```yaml
+name: AI review
+
+# pull_request_target runs this file from main, so a PR cannot weaken its own review.
+# PR code is never checked out or executed; the diff is only read as text.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    name: AI review
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: ouraihub/release-kit/review@v0
+        with:
+          base-url: ${{ secrets.AI_BASE_URL }}
+          api-key: ${{ secrets.AI_API_KEY }}
+          model: ${{ vars.AI_MODEL }}
+          merge-token: ${{ secrets.RELEASE_TOKEN }}
+```
+
+仓库需要：
+
+- secrets `AI_BASE_URL`、`AI_API_KEY`、`RELEASE_TOKEN`，变量 `AI_MODEL`。`RELEASE_TOKEN` 必须是 PAT：用 `GITHUB_TOKEN` 合并不会触发 main 上的工作流。
+- Settings → General 勾选 **Allow auto-merge** 和 **Automatically delete head branches**。
+- main 分支保护：要求 PR，必需检查填 CI 的 job 名和 `AI review`。没有分支保护时 `--auto` 会立即合并，CI 形同虚设。
+
+模型请求失败、返回格式不对、单个文件超过 12 万字符，都判为不通过；fork 来的 PR 一律不通过。release-please 的发布 PR 不在这里合并，由发版节奏决定。
+
 ## 规则
 
 提交信息：
