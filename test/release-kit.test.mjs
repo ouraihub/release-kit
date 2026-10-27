@@ -10,6 +10,7 @@ import { DEFAULTS } from '../lib/config.mjs'
 import { versionFileEntry } from '../lib/init.mjs'
 import { changelogSection } from '../lib/release.mjs'
 import { MAX_DIFF_CHARS, parseVerdict, reviewBatches } from '../lib/review.mjs'
+import { readPermissionExceptions } from '../lib/review-policy.mjs'
 import { planTag } from '../lib/tag.mjs'
 
 const config = { ...DEFAULTS, forbidden: ['Cherry', '对标'] }
@@ -127,4 +128,21 @@ test('review input is complete bounded batches and verdicts fail closed', () => 
   assert.equal(parseVerdict('{"verdict":"approve"}'), null)
   assert.equal(parseVerdict('invalid'), null)
   assert.equal(parseVerdict('{"verdict":"approve","issues":[]}').verdict, 'approve')
+})
+
+test('PR checkout cannot authorize a permission missing from trusted main', () => {
+  const { dir } = repo()
+  try {
+    writeFileSync(join(dir, 'release-kit-review.json'), JSON.stringify({
+      permissionExceptions: [{ workflow: '.github/workflows/ci.yml', job: 'reuse', permission: 'actions', level: 'write' }],
+    }))
+    inside(dir, () => {
+      assert.deepEqual(readPermissionExceptions('owner/repo', (path) => {
+        assert.equal(path, 'repos/owner/repo/git/trees/main')
+        return { truncated: false, tree: [] }
+      }), [])
+    })
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
