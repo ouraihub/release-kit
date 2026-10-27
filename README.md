@@ -106,6 +106,22 @@ jobs:
 
 模型请求失败、返回格式不对、单个文件超过 12 万字符，都判为不通过；fork 来的 PR 一律不通过。release-please 的发布 PR 不在这里合并，由发版节奏决定。
 
+### 主干批准的只读权限例外
+
+默认仍拒绝扩大 CI 权限。需要读取历史 Actions 结果时，可先通过独立 PR 在目标仓库 `main` 合入根目录 `release-kit-review.json`：
+
+```json
+{
+  "permissionExceptions": [
+    { "workflow": ".github/workflows/ci.yml", "job": "reuse", "permission": "actions", "level": "read" }
+  ]
+}
+```
+
+审查器从 GitHub 的 `main` tree 定位文件，再按不可变 blob SHA 读取；不信任当前 PR 的同名文件、PR 描述、评论或本地 checkout。仅支持精确工作流／任务的 `actions: read`，不支持通配符、写权限或自由提示词。没有文件时没有例外；配置非法或 API 失败则审查失败，不降级放行。
+
+顺序：先部署支持本策略的 release-kit 版本；再单独审查合入目标仓库的配置；最后重新审查申请权限的功能 PR。新增配置不会授权它所在的 PR。例外只是权限上限，仍须审查最小权限、代码安全及所有必需检查，不允许借例外削弱审查或检查。
+
 ## 规则
 
 提交信息：
