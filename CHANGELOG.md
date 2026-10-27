@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.4](https://github.com/ouraihub/release-kit/compare/v0.1.3...v0.1.4) (2026-10-27)
+
+
+### 问题修复
+
+* **review:** 仅接受主干已批准的精确只读权限例外 ([d598af3](https://github.com/ouraihub/release-kit/commit/d598af3b76447573e66fc65df5f1977c2f64da77))
+* **review:** 从可信主干读取精确只读权限例外 ([de8eba0](https://github.com/ouraihub/release-kit/commit/de8eba09ff78ac3ab199abe04ae9a953fef59700))
+
 ## [0.1.3](https://github.com/ouraihub/release-kit/compare/v0.1.2...v0.1.3) (2026-10-25)
 
 
