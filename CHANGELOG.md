@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.5](https://github.com/ouraihub/release-kit/compare/v0.1.4...v0.1.5) (2026-10-27)
+
+
+### 问题修复
+
+* **review:** 区分未来策略审批与当前令牌授权 ([0b102f6](https://github.com/ouraihub/release-kit/commit/0b102f6fa2e6ab97bdee7958e43d6ba98f93fdf1))
+* **review:** 避免首次只读策略审批循环拒绝 ([3e50bcf](https://github.com/ouraihub/release-kit/commit/3e50bcfb45b8d0ee382f85b95391bef850b3d049))
+
 ## [0.1.4](https://github.com/ouraihub/release-kit/compare/v0.1.3...v0.1.4) (2026-10-27)
 
 
