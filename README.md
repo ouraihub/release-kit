@@ -104,7 +104,9 @@ jobs:
 - Settings → General 勾选 **Allow auto-merge** 和 **Automatically delete head branches**。
 - main 分支保护：要求 PR，必需检查填 CI 的 job 名和 `AI review`。没有分支保护时 `--auto` 会立即合并，CI 形同虚设。
 
-模型请求失败、返回格式不对、单个文件超过 12 万字符，都判为不通过；fork 来的 PR 一律不通过。release-please 的发布 PR 不在这里合并，由发版节奏决定。
+审查器自己拉取 PR 提交并本地计算 diff，文件数量不受 GitHub 接口限制。模型请求失败、返回格式不对、单个文件超过 12 万字符，都判为不通过；fork 来的 PR 一律不通过。release-please 的发布 PR 不在这里合并，由发版节奏决定。
+
+生成文件：目标仓库 `main` 的 `.gitattributes` 中标记为 `linguist-generated` 的文件只列出路径，不把补丁交给模型逐行审查，由仓库 CI 负责校验它们与生成器输出一致。PR 自己修改 `.gitattributes` 不会生效；`.github/`、`AGENTS.md`、`release-kit-review.json` 不能被标记为生成文件。
 
 ### 主干批准的只读权限例外
 

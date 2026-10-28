@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -150,6 +150,32 @@ test('local PR diff covers every file, splits renames and ignores later base com
     assert.ok(files.includes('ci.yml') && files.includes('moved.yml'))
     assert.ok(!files.includes('main-only.txt'))
     assert.equal(reviewBatches(diff).join('').split(/^diff --git /m).length - 1, 322)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('only the base branch can mark files generated, never sensitive ones', () => {
+  const { dir, run, commit } = repo()
+  try {
+    mkdirSync(join(dir, '.github'))
+    commit('.gitattributes', 'gen.js linguist-generated\n.github/** linguist-generated\n', 'chore: attrs')
+    const base = run('rev-parse', 'HEAD')
+    writeFileSync(join(dir, 'gen.js'), 'x'.repeat(MAX_DIFF_CHARS * 2))
+    writeFileSync(join(dir, '.github/ci.yml'), 'on: push\n')
+    // The PR tries to exempt its own code from review.
+    writeFileSync(join(dir, '.gitattributes'), '* linguist-generated\n')
+    writeFileSync(join(dir, 'app.js'), 'run()\n')
+    run('add', '-A')
+    run('commit', '-q', '-m', 'feat: change')
+    const git = (...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    const { files, generated, diff } = prChanges(git, base, run('rev-parse', 'HEAD'))
+    assert.deepEqual(generated, ['gen.js'])
+    assert.equal(files.length, 4)
+    assert.match(diff, /^diff --git a\/app\.js/m)
+    assert.match(diff, /^diff --git a\/\.github\/ci\.yml/m)
+    assert.doesNotMatch(diff, /a\/gen\.js/)
+    assert.equal(reviewBatches(diff).length, 1)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
