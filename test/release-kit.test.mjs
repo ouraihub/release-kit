@@ -9,7 +9,7 @@ import { lintMessage } from '../lib/commits.mjs'
 import { DEFAULTS } from '../lib/config.mjs'
 import { versionFileEntry } from '../lib/init.mjs'
 import { changelogSection } from '../lib/release.mjs'
-import { MAX_DIFF_CHARS, parseVerdict, reviewBatches } from '../lib/review.mjs'
+import { MAX_DIFF_CHARS, parseVerdict, prChanges, reviewBatches } from '../lib/review.mjs'
 import { readPermissionExceptions } from '../lib/review-policy.mjs'
 import { planTag } from '../lib/tag.mjs'
 
@@ -128,6 +128,31 @@ test('review input is complete bounded batches and verdicts fail closed', () => 
   assert.equal(parseVerdict('{"verdict":"approve"}'), null)
   assert.equal(parseVerdict('invalid'), null)
   assert.equal(parseVerdict('{"verdict":"approve","issues":[]}').verdict, 'approve')
+})
+
+test('local PR diff covers every file, splits renames and ignores later base commits', () => {
+  const { dir, run, commit } = repo()
+  try {
+    commit('ci.yml', 'on: push\n', 'chore: base')
+    const base = run('rev-parse', 'HEAD')
+    run('checkout', '-q', '-b', 'pr')
+    run('mv', 'ci.yml', 'moved.yml')
+    for (let i = 0; i < 320; i++) writeFileSync(join(dir, `f${i}.txt`), `${i}\n`)
+    run('add', '-A')
+    run('commit', '-q', '-m', 'feat: many')
+    const head = run('rev-parse', 'HEAD')
+    run('checkout', '-q', base)
+    commit('main-only.txt', 'x\n', 'chore: later base')
+    const later = run('rev-parse', 'HEAD')
+    const git = (...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    const { files, diff } = prChanges(git, later, head)
+    assert.equal(files.length, 322)
+    assert.ok(files.includes('ci.yml') && files.includes('moved.yml'))
+    assert.ok(!files.includes('main-only.txt'))
+    assert.equal(reviewBatches(diff).join('').split(/^diff --git /m).length - 1, 322)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('PR checkout cannot authorize a permission missing from trusted main', () => {
