@@ -61,7 +61,7 @@ npx --yes github:ouraihub/release-kit#v0 notes "$VERSION"
 
 ## AI 审查与自动合并
 
-每个 PR 由模型按仓库根目录的 `AGENTS.md` 审查（没有就只看正确性和安全）。通过后开启自动合并，等分支保护要求的检查全部通过再合并。新建 `.github/workflows/ai-review.yml`：
+每个 PR 由模型按固定 base 提交的根 `AGENTS.md` 审查（没有就看正确性和安全）。分批发现候选，再按候选补充只读源码并独立复核；仅证据充分的新增缺陷／明确规则违规阻塞，一般建议仅评论。通过后开启自动合并，仍等待所有必需检查。新建 `.github/workflows/ai-review.yml`：
 
 ```yaml
 name: AI review
@@ -104,7 +104,17 @@ jobs:
 - Settings → General 勾选 **Allow auto-merge** 和 **Automatically delete head branches**。
 - main 分支保护：要求 PR，必需检查填 CI 的 job 名和 `AI review`。没有分支保护时 `--auto` 会立即合并，CI 形同虚设。
 
-模型请求失败、返回格式不对、单个文件超过 12 万字符，都判为不通过；fork 来的 PR 一律不通过。release-please 的发布 PR 不在这里合并，由发版节奏决定。
+审查器从事件固定 head SHA，拉取 base/head 并本地计算完整变更，文件数量不受 GitHub diff API 限制。提交变化、模型/API/JSON 错误或上下文不足标记为 `incomplete` 并禁止合并，不谎称发现代码缺陷。报告记录 base/head；只有通过时输出 `reviewed-head-sha`，自动合并使用 `--match-head-commit` 再校验。fork PR 失败关闭；release-please 的发布 PR 不在这里合并。
+
+生成文件不因 `linguist-generated` 标注而免审；所有实际补丁都进入审查。单文件或完整输入超过安全上限时明确未完成，不把“CI 应该验证生成器”当成已验证事实。
+
+审查分为两阶段：所有 diff 批次先给候选，多批 PR 随后强制执行包含全部原始补丁的跨批一致性扫描，即使局部零候选也不跳过；再统一复核候选。候选复核可申请固定提交的相关文件或行范围，不执行 PR 代码。阻塞意见必须有准确位置、触发条件、实际影响、可对照原文的证据；规则违规还必须引用可信 base 规则。复核可保留阻塞、降为建议或驳回。全部输入超过上限则未完成，不截断后放行。
+
+代码上下文的 `side: base` 指三点 diff 的 merge-base，`side: head` 指事件 head；可信规则独立读取目标分支 base SHA。目标分支推进后旧侧行号仍与补丁一致，不把 target tip 的内容误作删除前证据。
+
+上下文请求有明确轮数、文件大小、总输入量和候选数量上限；触顶为未完成，不截断后放行。置信度分数不作为正确性证明。鉴权、数据完整性及必需检查的行为保证不得降低，但等效测试重写不按断言或步骤数量机械否决；修改授权政策仍须独立可信审批。
+
+直接调用 `review` 命令用于 CI 时必须提供含 PR 编号和 head SHA 的 `GITHUB_EVENT_PATH`。模型只能建议受限的 Git blob 读取；PR 描述、diff 和源码均为不可信数据，不能授权新权限，也不允许模型执行 shell。
 
 ### 主干批准的只读权限例外
 

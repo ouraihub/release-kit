@@ -92,9 +92,17 @@ else if (command === 'tag') {
   if (!notes) throw new Error(`CHANGELOG.md has no section for ${positionals[0]}`)
   console.log(notes)
 } else if (command === 'review') {
-  const { AI_BASE_URL, AI_API_KEY, AI_MODEL, PR_NUMBER, GITHUB_REPOSITORY, GITHUB_STEP_SUMMARY } = process.env
-  const approved = await review({ baseUrl: AI_BASE_URL, apiKey: AI_API_KEY, model: AI_MODEL, pr: PR_NUMBER, repository: GITHUB_REPOSITORY, summaryFile: GITHUB_STEP_SUMMARY })
-  process.exitCode = approved ? 0 : 1
+  const { AI_BASE_URL, AI_API_KEY, AI_MODEL, PR_NUMBER, GITHUB_REPOSITORY, GITHUB_STEP_SUMMARY, GITHUB_EVENT_PATH } = process.env
+  let expectedHeadSha
+  if (GITHUB_EVENT_PATH) {
+    const event = JSON.parse(readFileSync(GITHUB_EVENT_PATH, 'utf8'))
+    expectedHeadSha = event.pull_request?.head?.sha
+    if (!/^[a-f0-9]{40,64}$/.test(expectedHeadSha ?? '') || String(event.pull_request?.number) !== PR_NUMBER)
+      throw new Error('Review event does not identify the requested PR head')
+  }
+  const result = await review({ baseUrl: AI_BASE_URL, apiKey: AI_API_KEY, model: AI_MODEL, pr: PR_NUMBER, repository: GITHUB_REPOSITORY, summaryFile: GITHUB_STEP_SUMMARY, expectedHeadSha })
+  if (result.approved) output({ 'reviewed-head-sha': result.headSha })
+  process.exitCode = result.approved ? 0 : 1
 } else if (command === 'init') {
   const written = init({ component: values.component, version: values.version, versionFiles: values['version-file'] ?? [], forbidden: values.forbid ?? [] })
   console.log(written.length ? `created:\n  ${written.join('\n  ')}` : 'nothing to create; files already exist')

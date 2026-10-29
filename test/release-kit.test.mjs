@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -9,7 +9,7 @@ import { lintMessage } from '../lib/commits.mjs'
 import { DEFAULTS } from '../lib/config.mjs'
 import { versionFileEntry } from '../lib/init.mjs'
 import { changelogSection } from '../lib/release.mjs'
-import { MAX_DIFF_CHARS, parseVerdict, reviewBatches } from '../lib/review.mjs'
+import { MAX_DIFF_CHARS, prChanges, reviewBatches } from '../lib/review.mjs'
 import { readPermissionExceptions } from '../lib/review-policy.mjs'
 import { planTag } from '../lib/tag.mjs'
 
@@ -115,7 +115,7 @@ test('tag only the commit that changed the manifest, once', () => {
   }
 })
 
-test('review input is complete bounded batches and verdicts fail closed', () => {
+test('review input preserves every patch and rejects oversized files', () => {
   const patch = (name, size) => `diff --git a/${name} b/${name}\n` + 'x'.repeat(size) + '\n'
   const a = patch('a', 70_000), b = patch('b', 70_000), c = patch('c', 20_000)
   const batches = reviewBatches(a + b + c)
@@ -124,10 +124,57 @@ test('review input is complete bounded batches and verdicts fail closed', () => 
   assert.deepEqual(reviewBatches(patch('edge', MAX_DIFF_CHARS - patch('edge', 0).length)).map((value) => value.length), [MAX_DIFF_CHARS])
   assert.throws(() => reviewBatches(patch('huge', MAX_DIFF_CHARS)), /exceeds/)
   assert.throws(() => reviewBatches(''), /Missing/)
-  assert.equal(parseVerdict('{"verdict":"approve","issues":["bug"]}').verdict, 'request_changes')
-  assert.equal(parseVerdict('{"verdict":"approve"}'), null)
-  assert.equal(parseVerdict('invalid'), null)
-  assert.equal(parseVerdict('{"verdict":"approve","issues":[]}').verdict, 'approve')
+})
+
+test('local PR diff covers every file, splits renames and ignores later base commits', () => {
+  const { dir, run, commit } = repo()
+  try {
+    commit('ci.yml', 'on: push\n', 'chore: base')
+    const base = run('rev-parse', 'HEAD')
+    run('checkout', '-q', '-b', 'pr')
+    run('mv', 'ci.yml', 'moved.yml')
+    for (let i = 0; i < 320; i++) writeFileSync(join(dir, `f${i}.txt`), `${i}\n`)
+    run('add', '-A')
+    run('commit', '-q', '-m', 'feat: many')
+    const head = run('rev-parse', 'HEAD')
+    run('checkout', '-q', base)
+    commit('main-only.txt', 'x\n', 'chore: later base')
+    const later = run('rev-parse', 'HEAD')
+    const git = (...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    const { files, diff } = prChanges(git, later, head)
+    assert.equal(files.length, 322)
+    assert.ok(files.includes('ci.yml') && files.includes('moved.yml'))
+    assert.ok(!files.includes('main-only.txt'))
+    assert.equal(reviewBatches(diff).join('').split(/^diff --git /m).length - 1, 322)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('generated attributes never exempt patches from review', () => {
+  const { dir, run, commit } = repo()
+  try {
+    mkdirSync(join(dir, '.github'))
+    commit('.gitattributes', 'gen.js linguist-generated\n.github/** linguist-generated\n', 'chore: attrs')
+    const base = run('rev-parse', 'HEAD')
+    writeFileSync(join(dir, 'gen.js'), 'x'.repeat(MAX_DIFF_CHARS * 2))
+    writeFileSync(join(dir, '.github/ci.yml'), 'on: push\n')
+    // The PR tries to exempt its own code from review.
+    writeFileSync(join(dir, '.gitattributes'), '* linguist-generated\n')
+    writeFileSync(join(dir, 'app.js'), 'run()\n')
+    run('add', '-A')
+    run('commit', '-q', '-m', 'feat: change')
+    const git = (...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    const { files, generated, diff } = prChanges(git, base, run('rev-parse', 'HEAD'))
+    assert.deepEqual(generated, [])
+    assert.equal(files.length, 4)
+    assert.match(diff, /^diff --git a\/app\.js/m)
+    assert.match(diff, /^diff --git a\/\.github\/ci\.yml/m)
+    assert.match(diff, /^diff --git a\/gen\.js/m)
+    assert.throws(() => reviewBatches(diff), /exceeds/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('PR checkout cannot authorize a permission missing from trusted main', () => {

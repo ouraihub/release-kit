@@ -25,6 +25,7 @@ runs:
       shell: bash
       run: exit 1
     - name: Review
+      id: review
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -39,4 +40,7 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.merge-token }}
-      run: gh pr merge "${{ github.event.pull_request.number }}" -R "${{ github.repository }}" --auto --merge
+        REVIEWED_HEAD_SHA: ${{ steps.review.outputs.reviewed-head-sha }}
+      run: |
+        test -n "$REVIEWED_HEAD_SHA"
+        gh pr merge "${{ github.event.pull_request.number }}" -R "${{ github.repository }}" --auto --merge --match-head-commit "$REVIEWED_HEAD_SHA"
