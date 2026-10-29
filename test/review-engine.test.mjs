@@ -222,6 +222,36 @@ test('trusted base rule citation can block and duplicate candidates are reviewed
   assert.match(f.comments[0], /Base rule: AGENTS\.md:1-1/)
 })
 
+for (const targetChange of ['deleted', 'shifted']) {
+  test(`old-side evidence uses merge base when target file was ${targetChange}, rules use target tip`, async (t) => {
+    const f = fixture(t)
+    const mergeBaseSha = f.baseSha
+    f.git('checkout', '-q', '--detach', mergeBaseSha)
+    if (targetChange === 'deleted') f.git('rm', 'a.mjs')
+    else f.write('a.mjs', '// target-only line\nexport const calculate = () => 100\n')
+    f.write('AGENTS.md', 'Target policy: preserve finite results.\n')
+    f.git('add', '.')
+    f.git('commit', '-qm', 'chore: target advances')
+    f.state.baseSha = f.git('rev-parse', 'HEAD').trim()
+    f.git('push', '-q', 'origin', 'HEAD:refs/heads/main')
+    const old = finding({ kind: 'rule', side: 'base', evidence: [{ path: 'a.mjs', side: 'base', startLine: 1, endLine: 1, quote: 'export const calculate = (n, d) => d ? n / d : 0' }], rule: { path: 'AGENTS.md', startLine: 1, endLine: 1, quote: 'Target policy: preserve finite results.' } })
+    const m = await model(t, (input, message) => {
+      assert.equal(input.manifest.baseSha, f.state.baseSha)
+      assert.equal(input.manifest.mergeBaseSha, mergeBaseSha)
+      assert.match(message.messages[0].content, /Target policy: preserve finite results/)
+      assert.doesNotMatch(message.messages[0].content, /Preserve finite calculation results/)
+      if (input.phase === 'scan') return scan([old])
+      assert.equal(input.code.find((item) => item.path === 'a.mjs' && item.side === 'base').content, old.evidence[0].quote)
+      return recheck('blocker', old)
+    })
+    const result = await review({ ...f.options, baseUrl: m.baseUrl })
+    assert.equal(result.status, 'changes_requested')
+    assert.equal(result.baseSha, f.state.baseSha)
+    assert.equal(m.calls.filter((input) => input.phase === 'recheck').length, 1)
+    assert.match(f.comments[0], /Target policy: preserve finite results/)
+  })
+}
+
 test('over-limit blob context fails closed before reading its bytes', async (t) => {
   const f = fixture(t, { oversized: true })
   const oid = f.git('rev-parse', 'HEAD:oversized.mjs').trim()
