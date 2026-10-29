@@ -1,6 +1,6 @@
 {
   "name": "@ouraihub/release-kit",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Release PR, Chinese CHANGELOG, build-once tagging and commit/comment checks for GitHub projects.",
   "license": "MIT",
   "type": "module",
