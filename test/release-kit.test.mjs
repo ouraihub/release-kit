@@ -151,7 +151,7 @@ test('local PR diff covers every file, splits renames and ignores later base com
   }
 })
 
-test('only the base branch can mark files generated, never sensitive ones', () => {
+test('generated attributes never exempt patches from review', () => {
   const { dir, run, commit } = repo()
   try {
     mkdirSync(join(dir, '.github'))
@@ -166,12 +166,12 @@ test('only the base branch can mark files generated, never sensitive ones', () =
     run('commit', '-q', '-m', 'feat: change')
     const git = (...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
     const { files, generated, diff } = prChanges(git, base, run('rev-parse', 'HEAD'))
-    assert.deepEqual(generated, ['gen.js'])
+    assert.deepEqual(generated, [])
     assert.equal(files.length, 4)
     assert.match(diff, /^diff --git a\/app\.js/m)
     assert.match(diff, /^diff --git a\/\.github\/ci\.yml/m)
-    assert.doesNotMatch(diff, /a\/gen\.js/)
-    assert.equal(reviewBatches(diff).length, 1)
+    assert.match(diff, /^diff --git a\/gen\.js/m)
+    assert.throws(() => reviewBatches(diff), /exceeds/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
