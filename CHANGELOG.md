@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.6](https://github.com/ouraihub/release-kit/compare/v0.1.5...v0.1.6) (2026-10-29)
+
+
+### 问题修复
+
+* **review:** 基线标记的生成文件只列路径，不送模型逐行审查 ([c5a8835](https://github.com/ouraihub/release-kit/commit/c5a883554821782a42999b4d8ce1fa22f588ec41))
+* **review:** 复核候选证据并绑定审查提交 ([8a4af04](https://github.com/ouraihub/release-kit/commit/8a4af044870bf4b208709c1608e9b3d4d30f5ca0))
+* **review:** 完整差异与两阶段证据复核 ([7417fbc](https://github.com/ouraihub/release-kit/commit/7417fbc463464574838e76773eb9383202699e1d))
+* **review:** 将旧侧证据绑定到分叉提交 ([6c9ee87](https://github.com/ouraihub/release-kit/commit/6c9ee873afab1c3abe653482e35caffaa63d85bc))
+* **review:** 强制跨批复核且不豁免生成补丁 ([bd0cf27](https://github.com/ouraihub/release-kit/commit/bd0cf271120674997330e151e620bfa01258dbdb))
+* **review:** 本地 git 计算完整 PR diff，不受 GitHub 300/100 文件上限 ([522eb11](https://github.com/ouraihub/release-kit/commit/522eb1143c616e6d3fb105fa0eb19b1ccbc33068))
+
 ## [0.1.5](https://github.com/ouraihub/release-kit/compare/v0.1.4...v0.1.5) (2026-10-27)
 
 
