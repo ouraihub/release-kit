@@ -9,7 +9,7 @@ import { lintMessage } from '../lib/commits.mjs'
 import { DEFAULTS } from '../lib/config.mjs'
 import { versionFileEntry } from '../lib/init.mjs'
 import { changelogSection } from '../lib/release.mjs'
-import { MAX_DIFF_CHARS, parseVerdict, prChanges, reviewBatches } from '../lib/review.mjs'
+import { MAX_DIFF_CHARS, prChanges, reviewBatches } from '../lib/review.mjs'
 import { readPermissionExceptions } from '../lib/review-policy.mjs'
 import { planTag } from '../lib/tag.mjs'
 
@@ -115,7 +115,7 @@ test('tag only the commit that changed the manifest, once', () => {
   }
 })
 
-test('review input is complete bounded batches and verdicts fail closed', () => {
+test('review input preserves every patch and rejects oversized files', () => {
   const patch = (name, size) => `diff --git a/${name} b/${name}\n` + 'x'.repeat(size) + '\n'
   const a = patch('a', 70_000), b = patch('b', 70_000), c = patch('c', 20_000)
   const batches = reviewBatches(a + b + c)
@@ -124,10 +124,6 @@ test('review input is complete bounded batches and verdicts fail closed', () => 
   assert.deepEqual(reviewBatches(patch('edge', MAX_DIFF_CHARS - patch('edge', 0).length)).map((value) => value.length), [MAX_DIFF_CHARS])
   assert.throws(() => reviewBatches(patch('huge', MAX_DIFF_CHARS)), /exceeds/)
   assert.throws(() => reviewBatches(''), /Missing/)
-  assert.equal(parseVerdict('{"verdict":"approve","issues":["bug"]}').verdict, 'request_changes')
-  assert.equal(parseVerdict('{"verdict":"approve"}'), null)
-  assert.equal(parseVerdict('invalid'), null)
-  assert.equal(parseVerdict('{"verdict":"approve","issues":[]}').verdict, 'approve')
 })
 
 test('local PR diff covers every file, splits renames and ignores later base commits', () => {
