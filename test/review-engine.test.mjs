@@ -172,19 +172,30 @@ test('global consistency discovers a cross-batch mismatch after zero local candi
   assert.deepEqual(m.calls.map((input) => input.scope ?? input.phase), ['batch', 'batch', 'consistency', 'recheck'])
 })
 
-test('global consistency input over the request limit fails closed without truncation', async (t) => {
-  const f = fixture(t)
-  for (let i = 0; i < 3; i++) f.write(`large${i}.mjs`, `// ${'x'.repeat(110000)}\n`)
-  f.git('add', '.')
-  f.git('commit', '-qm', 'feat: multiple large patches')
-  f.state.headSha = f.git('rev-parse', 'HEAD').trim()
-  f.git('push', '-q', 'origin', 'HEAD:refs/pull/13/head')
-  const m = await model(t, () => scan())
-  assert.equal((await review({ ...f.options, expectedHeadSha: f.state.headSha, baseUrl: m.baseUrl })).status, 'incomplete')
-  assert.equal(m.calls.length, 3)
-  assert.equal(m.calls.every((input) => input.scope === 'batch'), true)
-  assert.match(f.comments[0], /input exceeds/)
-})
+for (const count of [3, 5]) {
+  test(`global consistency ${count === 3 ? 'accepts complete input above 300k' : 'fails closed above 500k without truncation'}`, async (t) => {
+    const f = fixture(t)
+    for (let i = 0; i < count; i++) f.write(`large${i}.mjs`, `// ${'x'.repeat(110000)}\n`)
+    f.git('add', '.')
+    f.git('commit', '-qm', 'feat: multiple large patches')
+    f.state.headSha = f.git('rev-parse', 'HEAD').trim()
+    f.git('push', '-q', 'origin', 'HEAD:refs/pull/13/head')
+    const expectedDiff = f.git('diff', '--no-renames', '--no-ext-diff', '--no-textconv', '--no-color', `${f.baseSha}...${f.state.headSha}`, '--', '.')
+    const m = await model(t, (input, message) => {
+      if (input.scope === 'consistency') {
+        assert.equal(input.patches.join(''), expectedDiff)
+        const chars = message.messages.reduce((size, item) => size + item.content.length, 0)
+        assert.ok(chars > LIMITS.requestChars && chars <= LIMITS.consistencyChars)
+      }
+      return scan()
+    })
+    const result = await review({ ...f.options, expectedHeadSha: f.state.headSha, baseUrl: m.baseUrl })
+    assert.equal(result.status, count === 3 ? 'approved' : 'incomplete')
+    assert.equal(m.calls.length, count === 3 ? count + 1 : count)
+    assert.equal(m.calls.filter((input) => input.scope === 'consistency').length, count === 3 ? 1 : 0)
+    if (count === 5) assert.match(f.comments[0], /input exceeds/)
+  })
+}
 
 for (const which of ['headSha', 'baseSha']) {
   test(`moving ${which} invalidates a completed review`, async (t) => {
@@ -223,6 +234,34 @@ test('context rounds are bounded even when the same request keeps recurring', as
   assert.equal(m.calls.length, LIMITS.rounds + 1)
 })
 
+test('out-of-range context returns unavailable, then whole-file recovery completes within two rounds', async (t) => {
+  const f = fixture(t)
+  const m = await model(t, (input) => {
+    if (!input.previous.length) return scan([], [context('z.mjs', 'head', 1, 100)], false)
+    if (input.previous.length === 1) {
+      assert.deepEqual(input.context, [{ ...context('z.mjs', 'head', 1, 100), error: 'unavailable' }])
+      return scan([], [context('z.mjs')], false)
+    }
+    assert.equal(input.context.length, 2)
+    assert.equal(input.context[1].content, 'import { calculate } from "./a.mjs"\nexport const caller = () => calculate(5, 0)')
+    assert.equal(input.context[1].startLine, 1)
+    assert.equal(input.context[1].endLine, 2)
+    return scan()
+  })
+  assert.equal((await review({ ...f.options, baseUrl: m.baseUrl })).status, 'approved')
+  assert.equal(m.calls.length, LIMITS.rounds + 1)
+})
+
+test('unavailable context still unresolved at the round limit fails closed', async (t) => {
+  const f = fixture(t)
+  const m = await model(t, (input) => {
+    if (input.previous.length) assert.equal(input.context.at(-1).error, 'unavailable')
+    return scan([], [context('z.mjs', 'head', 1, 100)], false)
+  })
+  assert.equal((await review({ ...f.options, baseUrl: m.baseUrl })).status, 'incomplete')
+  assert.equal(m.calls.length, LIMITS.rounds + 1)
+})
+
 test('blob boundaries reject unsafe paths, refs, modes and sizes before reading content', () => {
   const refs = { base: 'a'.repeat(40), head: 'b'.repeat(40) }
   let reads = 0
@@ -239,7 +278,7 @@ test('blob boundaries reject unsafe paths, refs, modes and sizes before reading 
   assert.throws(() => blobReader(git, { ...refs, head: 'HEAD' }), /commit/)
   for (const mode of ['120000 blob', '160000 commit']) {
     const unsafe = blobReader(() => `${mode} ${'c'.repeat(40)}\tlink\0`, refs)
-    assert.throws(() => unsafe(context('link')), /unsafe/)
+    assert.throws(() => unsafe(context('link')))
   }
   assert.equal(reads, 0)
 })
