@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.7](https://github.com/ouraihub/release-kit/compare/v0.1.6...v0.1.7) (2026-10-29)
+
+
+### 问题修复
+
+* **review:** 允许更正不可用上下文范围 ([75bb0c8](https://github.com/ouraihub/release-kit/commit/75bb0c88901688550ef673bcdc11385b67ec4dff))
+* **review:** 允许更正不可用上下文范围 ([54cb37f](https://github.com/ouraihub/release-kit/commit/54cb37fa0a5f22b9306b78bf8557bfee8652021c))
+
 ## [0.1.6](https://github.com/ouraihub/release-kit/compare/v0.1.5...v0.1.6) (2026-10-29)
 
 
