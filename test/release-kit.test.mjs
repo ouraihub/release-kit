@@ -115,14 +115,15 @@ test('tag only the commit that changed the manifest, once', () => {
   }
 })
 
-test('review input preserves every patch and rejects oversized files', () => {
+test('review input preserves whole oversized patches in separate batches', () => {
   const patch = (name, size) => `diff --git a/${name} b/${name}\n` + 'x'.repeat(size) + '\n'
   const a = patch('a', 70_000), b = patch('b', 70_000), c = patch('c', 20_000)
   const batches = reviewBatches(a + b + c)
   assert.deepEqual(batches, [a, b + c])
   assert.equal(batches.join(''), a + b + c)
   assert.deepEqual(reviewBatches(patch('edge', MAX_DIFF_CHARS - patch('edge', 0).length)).map((value) => value.length), [MAX_DIFF_CHARS])
-  assert.throws(() => reviewBatches(patch('huge', MAX_DIFF_CHARS)), /exceeds/)
+  const huge = patch('huge', MAX_DIFF_CHARS * 2)
+  assert.deepEqual(reviewBatches(a + huge + c), [a, huge, c])
   assert.throws(() => reviewBatches(''), /Missing/)
 })
 
@@ -171,7 +172,7 @@ test('generated attributes never exempt patches from review', () => {
     assert.match(diff, /^diff --git a\/app\.js/m)
     assert.match(diff, /^diff --git a\/\.github\/ci\.yml/m)
     assert.match(diff, /^diff --git a\/gen\.js/m)
-    assert.throws(() => reviewBatches(diff), /exceeds/)
+    assert.equal(reviewBatches(diff).join(''), diff)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
