@@ -3,16 +3,20 @@ import { execFileSync } from 'node:child_process'
 import { appendFileSync, readFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 import { scanTree } from '../lib/comments.mjs'
+import { scanCodeSize } from '../lib/code-size.mjs'
 import { commitsSince, lintMessage } from '../lib/commits.mjs'
 import { loadConfig } from '../lib/config.mjs'
 import { init } from '../lib/init.mjs'
 import { changelogSection } from '../lib/release.mjs'
 import { review } from '../lib/review.mjs'
+import { formatReviewSize, reviewSize } from '../lib/review-size.mjs'
 import { createTag, planTag } from '../lib/tag.mjs'
 
 const USAGE = `release-kit <command>
   init --version <x.y.z> [--component <name>] --version-file <path>... [--forbid <word>...]
-  check [--base <ref>]       commit messages since base + forbidden words in tracked files
+  check [--base <ref>]       commits, forbidden words and TS/Rust/Python/Svelte file sizes
+  review-size --base <ref> [--head <ref>] [--title <text>] [--body-file <path>]
+                            local PR input budget check; exit 1 means split before pushing
   tag [--dry-run]            tag a merged release PR (CI, after the build succeeded)
   notes <version>            print that version's CHANGELOG.md section
   review                     AI merge gate for one PR (CI; env PR_NUMBER, AI_BASE_URL, AI_API_KEY, AI_MODEL)`
@@ -55,11 +59,13 @@ function check(base) {
   }
   const hits = scanTree(config)
   for (const hit of hits) console.error(`${hit.file}:${hit.line}: mentions reference project "${hit.word}"`)
-  if (failed || hits.length) {
-    console.error(`\nrelease-kit: ${failed} commit(s), ${hits.length} line(s) to fix. Rules: https://github.com/ouraihub/release-kit#规则`)
+  const sizes = scanCodeSize()
+  for (const hit of sizes) console.error(`${hit.file}:${hit.line}: ${hit.message}`)
+  if (failed || hits.length || sizes.length) {
+    console.error(`\nrelease-kit: ${failed} commit(s), ${hits.length} forbidden line(s), ${sizes.length} code size violation(s). Rules: https://github.com/ouraihub/release-kit#规则`)
     process.exit(1)
   }
-  console.log('release-kit: commits and comments ok')
+  console.log('release-kit: commits, comments and code sizes ok')
 }
 
 function output(values) {
@@ -73,6 +79,9 @@ const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
     base: { type: 'string' },
+    head: { type: 'string' },
+    title: { type: 'string' },
+    'body-file': { type: 'string' },
     'dry-run': { type: 'boolean' },
     version: { type: 'string' },
     component: { type: 'string' },
@@ -82,7 +91,16 @@ const { values, positionals } = parseArgs({
 })
 
 if (command === 'check') check(values.base ?? defaultBase())
-else if (command === 'tag') {
+else if (command === 'review-size') {
+  try {
+    const result = reviewSize({ base: values.base, head: values.head, title: values.title, body: values['body-file'] ? readFileSync(values['body-file'], 'utf8') : '' })
+    console.log(formatReviewSize(result))
+    process.exitCode = result.fits ? 0 : 1
+  } catch (error) {
+    console.error(`release-kit: ${error.message}`)
+    process.exitCode = 1
+  }
+} else if (command === 'tag') {
   const plan = planTag({ tagPrefix: loadConfig().tagPrefix ?? 'v' })
   if (plan.action === 'create' && !values['dry-run']) createTag(plan)
   console.log(`${plan.action} ${plan.tag}${plan.reason ? ` (${plan.reason})` : ''}`)
