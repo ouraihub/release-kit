@@ -172,8 +172,8 @@ test('global consistency discovers a cross-batch mismatch after zero local candi
   assert.deepEqual(m.calls.map((input) => input.scope ?? input.phase), ['batch', 'batch', 'consistency', 'recheck'])
 })
 
-for (const count of [3, 5]) {
-  test(`global consistency ${count === 3 ? 'accepts complete input above 300k' : 'fails closed above 500k without truncation'}`, async (t) => {
+for (const count of [12, 19]) {
+  test(`global consistency ${count === 12 ? 'accepts complete input above the ordinary request cap' : 'fails closed above its cap without truncation'}`, async (t) => {
     const f = fixture(t)
     for (let i = 0; i < count; i++) f.write(`large${i}.mjs`, `// ${'x'.repeat(110000)}\n`)
     f.git('add', '.')
@@ -190,10 +190,42 @@ for (const count of [3, 5]) {
       return scan()
     })
     const result = await review({ ...f.options, expectedHeadSha: f.state.headSha, baseUrl: m.baseUrl })
-    assert.equal(result.status, count === 3 ? 'approved' : 'incomplete')
-    assert.equal(m.calls.length, count === 3 ? count + 1 : count)
-    assert.equal(m.calls.filter((input) => input.scope === 'consistency').length, count === 3 ? 1 : 0)
-    if (count === 5) assert.match(f.comments[0], /input exceeds/)
+    assert.equal(result.status, count === 12 ? 'approved' : 'incomplete')
+    assert.equal(m.calls.length, count === 12 ? count + 1 : count)
+    assert.equal(m.calls.filter((input) => input.scope === 'consistency').length, count === 12 ? 1 : 0)
+    if (count === 19) assert.match(f.comments[0], /input exceeds/)
+  })
+}
+
+for (const size of [210000, 510000]) {
+  test(`single escaped patch ${size === 210000 ? 'is reviewed completely' : 'fails closed at the serialized request cap'}`, async (t) => {
+    const f = fixture(t)
+    const content = `// ${'"'.repeat(size)}\n`
+    f.write('large.mjs', content)
+    f.git('add', '.')
+    f.git('commit', '-qm', 'feat: large file')
+    f.state.headSha = f.git('rev-parse', 'HEAD').trim()
+    f.git('push', '-q', 'origin', 'HEAD:refs/pull/13/head')
+    const expectedDiff = f.git('diff', '--no-renames', '--no-ext-diff', '--no-textconv', '--no-color', `${f.baseSha}...${f.state.headSha}`, '--', '.')
+    const m = await model(t, (input, message) => {
+      assert.ok(message.messages.reduce((sum, item) => sum + item.content.length, 0) <= LIMITS.requestChars)
+      if (input.scope === 'batch' && input.patch.includes('a/large.mjs')) {
+        assert.ok(input.patch.includes(`+${content}`))
+        if (!input.context.length) return scan([], [context('large.mjs')], false)
+      }
+      if (input.scope === 'consistency') assert.equal(input.patches.join(''), expectedDiff)
+      if (input.context.length) assert.equal(input.context[0].content, content.trimEnd())
+      return scan()
+    })
+    const result = await review({ ...f.options, expectedHeadSha: f.state.headSha, baseUrl: m.baseUrl })
+    assert.equal(result.status, size === 210000 ? 'approved' : 'incomplete')
+    if (size === 510000) {
+      assert.equal(m.calls.some((input) => input.patch?.includes('a/large.mjs')), false)
+      assert.match(f.comments[0], /input exceeds/)
+    } else {
+      assert.ok(m.calls.some((input) => input.context.length > 0))
+      assert.ok(m.calls.some((input) => input.scope === 'consistency'))
+    }
   })
 }
 
