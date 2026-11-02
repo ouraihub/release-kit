@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.8](https://github.com/ouraihub/release-kit/compare/v0.1.7...v0.1.8) (2026-11-02)
+
+
+### 新功能
+
+* **review:** 提交前检查代码尺寸与评审容量并规范本地评审 ([8ee8e3f](https://github.com/ouraihub/release-kit/commit/8ee8e3fa1117560a32451f8ce51f03f2e497577f))
+* **review:** 提交前检查代码尺寸与评审容量并规范本地评审 ([e22ae63](https://github.com/ouraihub/release-kit/commit/e22ae63f9c0bc8dc57172de6acbe1efec8983d55))
+
 ## [0.1.7](https://github.com/ouraihub/release-kit/compare/v0.1.6...v0.1.7) (2026-10-29)
 
 
