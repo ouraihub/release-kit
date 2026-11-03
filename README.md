@@ -106,6 +106,10 @@ jobs:
 
 审查器从事件固定 head SHA，拉取 base/head 并本地计算完整变更，文件数量不受 GitHub diff API 限制。提交变化、模型/API/JSON 错误或上下文不足标记为 `incomplete` 并禁止合并，不谎称发现代码缺陷。报告记录 base/head；只有通过时输出 `reviewed-head-sha`，自动合并使用 `--match-head-commit` 再校验。fork PR 失败关闭；release-please 的发布 PR 不在这里合并。
 
+模型服务须支持 Chat Completions 的 `response_format: { type: "json_object" }`（[OpenAI API 协议](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)）。JSON mode 只约束 JSON 语法，不保证阶段 schema；本地仍严格校验所有键、类型及证据。这里不假定第三方服务支持 `json_schema`。不支持协议、拒绝或截断的响应均为未完成，不重试、不降级、不修补模型文本；未知或缺失的 finish reason 仍须通过内容及 schema 校验。
+
+失败报告附结构化诊断：阶段、批次／候选与上下文轮次、固定原因码、choice 数、白名单 finish reason、拒绝标记、内容类型／字符数及 completion token 数（若提供）。不输出原始响应、拒绝文本、任意服务错误内容、响应头、URL、请求标识、密钥或源码片段；JSON 解析器错误也不直接透出。`content_json` 表示内容不是 JSON，`verdict_schema` 表示 JSON 不符合严格阶段 schema，`unfinished_completion` 表示服务明确报告截断或其他非正常终止；HTTP 错误仅记录状态码。已有失败若没有保留响应或这些诊断，无法事后还原具体格式错误。
+
 生成文件不因 `linguist-generated` 标注而免审；所有实际补丁都进入审查。普通批次以 120,000 字符为目标，超过目标的单文件补丁独立成批，不要求拆业务文件；最终按序列化后的完整请求大小检查安全上限。超限时明确未完成，不截断或跳过补丁。
 
 审查分为两阶段：所有 diff 批次先给候选，多批 PR 随后强制执行包含全部原始补丁的跨批一致性扫描，即使局部零候选也不跳过；再统一复核候选。候选复核可申请固定提交的相关文件或行范围，不执行 PR 代码。阻塞意见必须有准确位置、触发条件、实际影响、可对照原文的证据；规则违规还必须引用可信 base 规则。复核可保留阻塞、降为建议或驳回。全部输入超过上限则未完成，不截断后放行。

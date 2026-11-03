@@ -106,6 +106,83 @@ test('first-batch candidate is disproved by cross-batch caller context, never re
   assert.equal(f.metadataCalls(), 2)
 })
 
+test('requests JSON object mode before parsing the strict review schema', async (t) => {
+  const f = fixture(t)
+  const m = await model(t, (input, message) => {
+    assert.deepEqual(message.response_format, { type: 'json_object' })
+    return scan()
+  })
+  assert.equal((await review({ ...f.options, baseUrl: m.baseUrl })).approved, true)
+})
+
+test('malformed verdict reports safe diagnostics without exposing model content', async (t) => {
+  const f = fixture(t)
+  const m = await model(t, () => '{"private":"do not log"}')
+  const result = await review({ ...f.options, baseUrl: m.baseUrl })
+  assert.equal(result.status, 'incomplete')
+  assert.equal(m.calls.length, 1)
+  assert.doesNotMatch(f.comments[0], /do not log|private/)
+  assert.match(f.comments[0], /"reason":"verdict_schema"/)
+  assert.match(f.comments[0], /"phase":"scan","scope":"batch","batch":1/)
+})
+
+for (const [name, envelope, reason] of [
+  ['truncation', { choices: [{ finish_reason: 'length', message: { content: JSON.stringify(scan()) } }] }, 'unfinished_completion'],
+  ['refusal', { choices: [{ finish_reason: 'stop', message: { content: null, refusal: 'private refusal text' } }] }, 'refusal'],
+  ['non-JSON content', { choices: [{ finish_reason: 'stop', message: { content: 'private model prose' } }] }, 'content_json'],
+  ['non-JSON envelope', 'private model prose', 'envelope_json'],
+]) {
+  test(`HTTP response harness rejects ${name} without retry or content leakage`, async (t) => {
+    const f = fixture(t)
+    let calls = 0
+    const server = createServer(async (req, res) => {
+      let raw = ''
+      for await (const chunk of req) raw += chunk
+      const body = JSON.parse(raw)
+      assert.deepEqual(body.response_format, { type: 'json_object' })
+      calls++
+      res.setHeader('content-type', 'application/json')
+      res.end(typeof envelope === 'string' ? envelope : JSON.stringify(envelope))
+    })
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+    t.after(() => new Promise((resolve) => { server.close(resolve); server.closeAllConnections() }))
+    const result = await review({ ...f.options, baseUrl: `http://127.0.0.1:${server.address().port}` })
+    assert.equal(result.status, 'incomplete')
+    assert.equal(calls, 1)
+    assert.match(f.comments[0], new RegExp(`"reason":"${reason}"`))
+    if (reason === 'envelope_json') {
+      assert.match(f.comments[0], /"phase":"scan","scope":"batch","batch":1,"candidate":null,"round":0/)
+    }
+    assert.doesNotMatch(f.comments[0], /private refusal text|private model prose/)
+  })
+}
+
+test('malformed HTTP envelope identifies the recheck candidate and context round', async (t) => {
+  const f = fixture(t)
+  const calls = []
+  const server = createServer(async (req, res) => {
+    let raw = ''
+    for await (const chunk of req) raw += chunk
+    const input = JSON.parse(JSON.parse(raw).messages[1].content)
+    calls.push(input)
+    res.setHeader('content-type', 'application/json')
+    if (input.phase === 'recheck' && input.round === 1) {
+      res.end('private malformed envelope')
+      return
+    }
+    const answer = input.phase === 'scan' ? scan([finding()])
+      : recheck('blocker', finding(), [context('z.mjs')], false)
+    res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(answer) } }] }))
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => new Promise((resolve) => { server.close(resolve); server.closeAllConnections() }))
+  const result = await review({ ...f.options, baseUrl: `http://127.0.0.1:${server.address().port}` })
+  assert.equal(result.status, 'incomplete')
+  assert.equal(calls.length, 3)
+  assert.match(f.comments[0], /"phase":"recheck","scope":null,"batch":null,"candidate":1,"round":1,"reason":"envelope_json"/)
+  assert.doesNotMatch(f.comments[0], /private malformed envelope/)
+})
+
 test('confirmed concrete defect survives recheck and appears with its evidence', async (t) => {
   const f = fixture(t)
   const m = await model(t, (input) => input.phase === 'scan' ? scan([finding()]) : recheck('blocker', finding()))
