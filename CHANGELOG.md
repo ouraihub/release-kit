@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.9](https://github.com/ouraihub/release-kit/compare/v0.1.8...v0.1.9) (2026-11-03)
+
+
+### 问题修复
+
+* **review:** 请求结构化输出并提供安全失败诊断 ([f654414](https://github.com/ouraihub/release-kit/commit/f65441437cb4e86533a16accf2a3f97947bde7cc))
+* **review:** 请求结构化输出并提供安全失败诊断 ([5835787](https://github.com/ouraihub/release-kit/commit/5835787108d8c3a571819b9b25632a5a505c06f6))
+
 ## [0.1.8](https://github.com/ouraihub/release-kit/compare/v0.1.7...v0.1.8) (2026-11-02)
 
 
