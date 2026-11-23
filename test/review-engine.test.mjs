@@ -389,6 +389,8 @@ test('blob boundaries reject unsafe paths, refs, modes and sizes before reading 
     const unsafe = blobReader(() => `${mode} ${'c'.repeat(40)}\tlink\0`, refs)
     assert.throws(() => unsafe(context('link')))
   }
+  const directory = blobReader(() => `040000 tree ${'c'.repeat(40)}\tsrc\0`, refs)
+  assert.throws(() => directory(context('src')), (error) => error.code === 'CONTEXT_UNAVAILABLE')
   assert.equal(reads, 0)
 })
 
