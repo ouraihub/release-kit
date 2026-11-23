@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.10](https://github.com/ouraihub/release-kit/compare/v0.1.9...v0.1.10) (2026-11-23)
+
+
+### 问题修复
+
+* **review:** 目录上下文请求按不可用返回，不再中止审查 ([1fd06ab](https://github.com/ouraihub/release-kit/commit/1fd06ab9790361fb2d10360b07ca637c80d4c46e))
+* **review:** 目录上下文请求按不可用返回，不再中止审查 ([845805f](https://github.com/ouraihub/release-kit/commit/845805ff7dc9d13b8e8a8843116cffed5695e0b7))
+
 ## [0.1.9](https://github.com/ouraihub/release-kit/compare/v0.1.8...v0.1.9) (2026-11-03)
 
 
